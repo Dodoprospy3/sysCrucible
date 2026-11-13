@@ -1,53 +1,230 @@
 #!/usr/bin/env bash
+# ==============================================================================
+# sysCrucible / rundisnig — Arch Linux System Reproducer
+# Reproduces the full desktop environment, developer toolchain, dotfiles,
+# and configurations for Dodoprospy3.
+# ==============================================================================
 set -euo pipefail
 
-cd "$HOME" || exit
+# Helper: visual banner with figlet + lolcat if available
+print_banner() {
+    local text="$1"
+    echo ""
+    if command -v figlet &>/dev/null && command -v lolcat &>/dev/null; then
+        figlet -f standard "$text" | lolcat
+    else
+        echo "============================================================"
+        echo "  $text"
+        echo "============================================================"
+    fi
+    echo ""
+}
 
+# Helper: clone or update git repositories idempotently
+clone_or_update() {
+    local repo_url="$1"
+    local dest_dir="$2"
+    if [[ -d "$dest_dir/.git" ]]; then
+        echo "==> Updating existing repository at $dest_dir..."
+        git -C "$dest_dir" pull --rebase || echo "Warning: git pull failed for $dest_dir (ignoring)"
+    else
+        echo "==> Cloning $repo_url -> $dest_dir..."
+        mkdir -p "$(dirname "$dest_dir")"
+        git clone "$repo_url" "$dest_dir"
+    fi
+}
+
+cd "$HOME" || exit 1
+
+# ------------------------------------------------------------------------------
+# 1. System Update & Core Build Tools
+# ------------------------------------------------------------------------------
+print_banner "System Update"
 sudo pacman -Syu --noconfirm
 
-sudo pacman -S base-devel git --needed --noconfirm
-sudo pacman -S curl wget --needed --noconfirm
-sudo pacman -S figlet lolcat --needed --noconfirm
-sudo pacman -S rog-control-center --needed --noconfirm
-sudo pacman -S zoxide zsh neovim --needed --noconfirm
-sudo pacman -S hyprland waybar --needed --noconfirm
+print_banner "Core Packages"
+sudo pacman -S --needed --noconfirm \
+    base-devel \
+    git \
+    curl \
+    wget \
+    openssh \
+    unzip \
+    jq \
+    tree \
+    figlet \
+    lolcat
 
-chsh -s "$(command -v zsh)"
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+# ------------------------------------------------------------------------------
+# 2. Fonts & Typography (Critical for Waybar, Neovim, Ghostty, Tmux icons)
+# ------------------------------------------------------------------------------
+print_banner "Fonts & Icons"
+sudo pacman -S --needed --noconfirm \
+    ttf-jetbrains-mono-nerd \
+    noto-fonts-emoji \
+    terminus-font
 
-if ! command -v paru &>/dev/null; then
-    echo "paru is not installed."
+# ------------------------------------------------------------------------------
+# 3. Audio & Hardware Services
+# ------------------------------------------------------------------------------
+print_banner "Audio & Hardware"
+sudo pacman -S --needed --noconfirm \
+    pipewire \
+    pipewire-pulse \
+    pipewire-alsa \
+    pipewire-jack \
+    wireplumber \
+    pavucontrol \
+    brightnessctl \
+    networkmanager \
+    bluez \
+    bluez-utils
+
+# Enable core services
+sudo systemctl enable --now NetworkManager.service 2>/dev/null || true
+sudo systemctl enable --now bluetooth.service 2>/dev/null || true
+
+# ASUS ROG laptop support (if present)
+if pacman -Si rog-control-center &>/dev/null; then
+    sudo pacman -S --needed --noconfirm rog-control-center asusctl || true
+    sudo systemctl enable --now asusd.service 2>/dev/null || true
+fi
+
+# ------------------------------------------------------------------------------
+# 4. Hyprland & Wayland Desktop Stack
+# ------------------------------------------------------------------------------
+print_banner "Wayland & Hyprland"
+sudo pacman -S --needed --noconfirm \
+    hyprland \
+    hyprlock \
+    xdg-desktop-portal-hyprland \
+    waybar \
+    dunst \
+    rofi \
+    grim \
+    slurp \
+    wl-clipboard \
+    imv \
+    mpv
+
+# ------------------------------------------------------------------------------
+# 5. Developer CLI & Shell Environment
+# ------------------------------------------------------------------------------
+print_banner "Dev Environment"
+sudo pacman -S --needed --noconfirm \
+    zsh \
+    tmux \
+    neovim \
+    ghostty \
+    kitty \
+    zoxide \
+    fzf \
+    fd \
+    ripgrep \
+    btop \
+    fastfetch \
+    lazygit \
+    chromium
+
+# Set default shell to zsh
+if [[ "$SHELL" != *"zsh"* ]]; then
+    echo "==> Setting default shell to zsh..."
+    chsh -s "$(command -v zsh)" "$USER" || sudo chsh -s "$(command -v zsh)" "$USER" || true
+fi
+
+# ------------------------------------------------------------------------------
+# 6. Oh My Zsh & Custom Shell Plugins
+# ------------------------------------------------------------------------------
+print_banner "Oh My Zsh"
+if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
+    echo "==> Installing Oh My Zsh non-interactively..."
+    RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+fi
+
+ZSH_CUSTOM_PLUGINS="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins"
+mkdir -p "$ZSH_CUSTOM_PLUGINS"
+
+clone_or_update "https://github.com/zsh-users/zsh-syntax-highlighting.git" "$ZSH_CUSTOM_PLUGINS/zsh-syntax-highlighting"
+clone_or_update "https://github.com/zsh-users/zsh-autosuggestions.git" "$ZSH_CUSTOM_PLUGINS/zsh-autosuggestions"
+clone_or_update "https://github.com/zsh-users/zsh-history-substring-search.git" "$ZSH_CUSTOM_PLUGINS/zsh-history-substring-search"
+
+# ------------------------------------------------------------------------------
+# 7. AUR Helpers (paru & yay)
+# ------------------------------------------------------------------------------
+print_banner "AUR Helper Setup"
+cd "$HOME" || exit 1
+
+if ! command -v paru &>/dev/null && ! command -v yay &>/dev/null; then
+    echo "==> Neither paru nor yay found. Building paru..."
+    rm -rf paru
     git clone https://aur.archlinux.org/paru.git
-    cd paru || exit
-    makepkg -si
-    echo "paru installed successfully!" | figlet | lolcat
-    cd "$HOME" || exit
+    cd paru && makepkg -si --noconfirm
+    cd "$HOME" || exit 1
 fi
 
-if ! command -v yay &>/dev/null; then
-    echo "yay is not installed."
-    git clone https://aur.archlinux.org/yay.git
-    cd yay || exit
-    makepkg -si
-    echo "yay installed successfully!" | figlet | lolcat
-    cd "$HOME" || exit
+AUR_HELPER="paru"
+if ! command -v paru &>/dev/null && command -v yay &>/dev/null; then
+    AUR_HELPER="yay"
 fi
 
-cd "$HOME" || exit
-paru -Syu --noconfirm
+echo "==> Using AUR helper: $AUR_HELPER"
+$AUR_HELPER -Syu --noconfirm
 
-paru -S linutil --needed --noconfirm
+print_banner "AUR Applications"
+$AUR_HELPER -S --needed --noconfirm \
+    linutil \
+    zen-browser-bin \
+    vesktop-bin \
+    spotify || true
 
+# ------------------------------------------------------------------------------
+# 8. Tmux Plugin Manager (TPM)
+# ------------------------------------------------------------------------------
+print_banner "Tmux Plugins"
+clone_or_update "https://github.com/tmux-plugins/tpm" "$HOME/.tmux/plugins/tpm"
 
-cd "$HOME"/.config 
-mkdir -p nvim/
-cd nvim/
-git clone https://github.com/Dodoprospy3/nvimrc .
+# ------------------------------------------------------------------------------
+# 9. tmux-sessionizer-tweaked Installation
+# ------------------------------------------------------------------------------
+print_banner "tmux-sessionizer-tweaked"
+mkdir -p "$HOME/projects"
+clone_or_update "https://github.com/Dodoprospy3/tmux-sessionizer-tweaked.git" "$HOME/projects/tmux-sessionizer-tweaked"
 
+if [[ -f "$HOME/projects/tmux-sessionizer-tweaked/install.sh" ]]; then
+    echo "==> Running tmux-sessionizer-tweaked installer..."
+    bash "$HOME/projects/tmux-sessionizer-tweaked/install.sh"
+fi
 
-cd "$HOME"/.config 
-mkdir -p hypr/
-cd hypr/
-git clone https://github.com/Dodoprospy3/hyprdots .
+# ------------------------------------------------------------------------------
+# 10. Dotfiles & Personal Repositories
+# ------------------------------------------------------------------------------
+print_banner "Cloning Dotfiles"
 
+# Neovim config
+clone_or_update "https://github.com/Dodoprospy3/nvimrc.git" "$HOME/.config/nvim"
 
+# Hyprland dots
+clone_or_update "https://github.com/Dodoprospy3/hyprdots.git" "$HOME/.config/hypr"
+
+# Tmux config
+clone_or_update "https://github.com/Dodoprospy3/my-tmux-config.git" "$HOME/.config/tmux"
+
+# Waybar config
+clone_or_update "https://github.com/Dodoprospy3/my-waybar-config.git" "$HOME/.config/waybar"
+
+# Personal wallpapers
+clone_or_update "https://github.com/Dodoprospy3/my-wallpapers.git" "$HOME/Pictures/wallpapers"
+
+# ------------------------------------------------------------------------------
+# 11. Git Global Identity
+# ------------------------------------------------------------------------------
+print_banner "Git Configuration"
+git config --global user.name "Dodoprospy3"
+git config --global user.email "dodoprospy3@gmail.com"
+git config --global init.defaultBranch main
+
+# ------------------------------------------------------------------------------
+# 12. Completion
+# ------------------------------------------------------------------------------
+print_banner "System Reproduced Successfully!"
+echo "Done! Please log out or restart your session to activate all configurations."
