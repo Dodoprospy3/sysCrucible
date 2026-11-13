@@ -5,11 +5,12 @@ cd "$HOME" || exit
 
 sudo pacman -Syu --noconfirm
 
-# pacman installations
 sudo pacman -S base-devel git --needed --noconfirm
+sudo pacman -S curl wget --needed --noconfirm
 sudo pacman -S figlet lolcat --needed --noconfirm
 sudo pacman -S rog-control-center --needed --noconfirm
-
+sudo pacman -S zoxide zsh neovim --needed --noconfirm
+sudo pacman -S hyprland waybar --needed --noconfirm
 
 if ! command -v paru &>/dev/null; then
     echo "paru is not installed."
@@ -20,9 +21,29 @@ if ! command -v paru &>/dev/null; then
     cd "$HOME" || exit
 fi
 
+if ! command -v yay &>/dev/null; then
+    echo "yay is not installed."
+    git clone https://aur.archlinux.org/yay.git
+    cd yay || exit
+    makepkg -si
+    echo "yay installed successfully!" | figlet | lolcat
+    cd "$HOME" || exit
+fi
+
 cd "$HOME" || exit
 paru -Syu --noconfirm
 
-# paru installations
 paru -S linutil --needed --noconfirm
+
+cd "$HOME"/.config 
+mkdir -p nvim/
+cd nvim/
+git clone https://github.com/Dodoprospy3/nvimrc .
+
+
+cd "$HOME"/.config 
+mkdir -p hypr/
+cd hypr/
+git clone https://github.com/Dodoprospy3/hyprdots .
+
 
