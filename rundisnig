@@ -12,6 +12,9 @@ sudo pacman -S rog-control-center --needed --noconfirm
 sudo pacman -S zoxide zsh neovim --needed --noconfirm
 sudo pacman -S hyprland waybar --needed --noconfirm
 
+chsh -s "$(command -v zsh)"
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+
 if ! command -v paru &>/dev/null; then
     echo "paru is not installed."
     git clone https://aur.archlinux.org/paru.git
@@ -34,6 +37,7 @@ cd "$HOME" || exit
 paru -Syu --noconfirm
 
 paru -S linutil --needed --noconfirm
+
 
 cd "$HOME"/.config 
 mkdir -p nvim/
