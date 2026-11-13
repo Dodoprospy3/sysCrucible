@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 cd "$HOME" || exit
 
@@ -9,12 +10,13 @@ sudo pacman -S base-devel git --needed --noconfirm
 sudo pacman -S figlet lolcat --needed --noconfirm
 sudo pacman -S rog-control-center --needed --noconfirm
 
+
 if ! command -v paru &>/dev/null; then
     echo "paru is not installed."
     git clone https://aur.archlinux.org/paru.git
     cd paru || exit
     makepkg -si
-    echo "paru installed successfully!"
+    echo "paru installed successfully!" | figlet | lolcat
     cd "$HOME" || exit
 fi
 
