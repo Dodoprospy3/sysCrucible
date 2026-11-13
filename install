@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+cd "$HOME" || exit
+
+sudo pacman -Syu --noconfirm
+
+# pacman installations
+sudo pacman -S base-devel git --needed --noconfirm
+sudo pacman -S figlet lolcat --needed --noconfirm
+sudo pacman -S rog-control-center --needed --noconfirm
+
+if ! command -v paru &>/dev/null; then
+    echo "paru is not installed."
+    git clone https://aur.archlinux.org/paru.git
+    cd paru || exit
+    makepkg -si
+    echo "paru installed successfully!"
+    cd "$HOME" || exit
+fi
+
+cd "$HOME" || exit
+paru -Syu --noconfirm
+
+# paru installations
+paru -S linutil --needed --noconfirm
+
